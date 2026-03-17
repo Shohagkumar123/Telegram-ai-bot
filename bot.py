@@ -26,8 +26,9 @@ def handle_message(message):
     print(f"📩 ইউজার মেসেজ দিয়েছে: {message.text}", flush=True) 
     try:
         bot.send_chat_action(message.chat.id, 'typing')
+        # এখানে মডেলের নাম পরিবর্তন করে আরেকটি ফ্রি মডেল দেওয়া হলো
         response = client.chat.completions.create(
-            model="google/gemini-2.0-flash-lite-preview-02-05:free", 
+            model="google/gemini-2.0-pro-exp-02-05:free", 
             messages=[{"role": "user", "content": message.text}]
         )
         reply_text = response.choices[0].message.content
@@ -36,7 +37,8 @@ def handle_message(message):
         
     except Exception as e:
         print(f"❌ Error: {e}", flush=True)
-        bot.reply_to(message, "দুঃখিত, এআই এখন উত্তর দিতে পারছে না।")
+        # এবার বট সরাসরি এরর মেসেজটি টেলিগ্রামে পাঠিয়ে দিবে!
+        bot.reply_to(message, f"এআই এরর দিচ্ছে: {e}")
 
 # Flask সার্ভার
 app = Flask(__name__)
@@ -45,10 +47,8 @@ app = Flask(__name__)
 def home():
     return "Bot is Running!"
 
-# বটকে চালু রাখার ফাংশন (এররটি এখানেই ঠিক করা হয়েছে)
 def run_bot():
     print("🤖 Bot Polling Started...", flush=True)
-    # non_stop=True সরিয়ে দেওয়া হয়েছে
     bot.infinity_polling()
 
 if __name__ == "__main__":
