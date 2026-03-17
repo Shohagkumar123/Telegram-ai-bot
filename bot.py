@@ -3,59 +3,54 @@ from openai import OpenAI
 import os
 from flask import Flask
 import threading
+import sys
 
-# এনভায়রনমেন্ট ভেরিয়েবল থেকে API Key গুলো নেওয়া
+# এনভায়রনমেন্ট ভেরিয়েবল
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 
-# টেলিগ্রাম এবং OpenRouter সেটআপ
 bot = telebot.TeleBot(BOT_TOKEN)
 client = OpenAI(
   base_url="https://openrouter.ai/api/v1",
   api_key=OPENROUTER_API_KEY,
 )
 
-# ১. কেউ /start লিখলে বট এই উত্তরটি দিবে
+# কেউ /start লিখলে
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    bot.reply_to(message, "হ্যালো! আমি আপনার এআই (AI) বট। আমাকে যেকোনো কিছু জিজ্ঞেস করতে পারেন।")
+    print("✅ /start কমান্ড এসেছে!", flush=True) # এটি Render এর লগে দেখাবে
+    bot.reply_to(message, "হ্যালো! আমি রেডি। আমাকে কিছু জিজ্ঞেস করুন।")
 
-# ২. কেউ অন্য কোনো মেসেজ দিলে AI যা উত্তর দিবে
+# কেউ অন্য মেসেজ দিলে
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
+    print(f"📩 ইউজার মেসেজ দিয়েছে: {message.text}", flush=True) # এটি Render এর লগে দেখাবে
     try:
-        # ইউজারকে দেখানো যে বট টাইপ করছে
         bot.send_chat_action(message.chat.id, 'typing')
-        
-        # OpenRouter এর ফ্রি মডেল দিয়ে উত্তর তৈরি করা
         response = client.chat.completions.create(
             model="google/gemini-2.0-flash-lite-preview-02-05:free", 
             messages=[{"role": "user", "content": message.text}]
         )
-        
         reply_text = response.choices[0].message.content
         bot.reply_to(message, reply_text)
+        print("✅ AI উত্তর দিয়েছে!", flush=True)
         
     except Exception as e:
-        # যদি API তে কোনো সমস্যা হয়, তাহলে Render এর লগে (Log) এররটি দেখাবে এবং ইউজারকে নিচের মেসেজটি দিবে
-        print(f"Error occurred: {e}")
-        bot.reply_to(message, "দুঃখিত, এআই (AI) এখন উত্তর দিতে পারছে না। API Key বা অন্য কোনো সমস্যা হতে পারে।")
+        print(f"❌ Error: {e}", flush=True)
+        bot.reply_to(message, "দুঃখিত, এআই এখন উত্তর দিতে পারছে না।")
 
-# Render এ হোস্ট করার জন্য ছোট্ট একটি ফ্লাস্ক (Flask) ওয়েব সার্ভার
+# Flask সার্ভার
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "My Telegram AI Bot is Running Perfectly!"
+    return "Bot is Running!"
 
-# বটকে ব্যাকগ্রাউন্ডে চালু রাখার ফাংশন
 def run_bot():
-    # non_stop=True দিলে বট কোনো কারণে বন্ধ হলেও আবার নিজে নিজে চালু হবে
-    bot.infinity_polling(non_stop=True)
+    print("🤖 Bot Polling Started...", flush=True)
+    bot.infinity_polling(non_stop=True, timeout=60, request_timeout=60)
 
 if __name__ == "__main__":
-    # বটকে আলাদা থ্রেডে চালু করা হচ্ছে
     threading.Thread(target=run_bot).start()
-    # ওয়েব সার্ভার চালু করা হচ্ছে
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
