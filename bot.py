@@ -3,6 +3,7 @@ from openai import OpenAI
 import os
 from flask import Flask
 import threading
+import base64 # ছবিকে কোডে রূপান্তর করার জন্য নতুন লাইব্রেরি
 
 # এনভায়রনমেন্ট ভেরিয়েবল
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
@@ -14,50 +15,67 @@ client = OpenAI(
   api_key=OPENROUTER_API_KEY,
 )
 
-# ডিফল্ট একটি মডেল (এটি কাজ না করলেও সমস্যা নেই, আমরা টেলিগ্রাম থেকে পরিবর্তন করতে পারবো)
+# ডিফল্ট মডেল (এটি গুগলের মডেল, যা টেক্সট এবং ছবি দুটোই দারুণ বোঝে)
 DEFAULT_MODEL = "google/gemini-1.5-flash:free"
-
-# কোন ইউজার কোন মডেল ব্যবহার করছে, তা সেভ রাখার জন্য একটি ডিকশনারি
 user_models = {}
 
-# ১. কেউ /start লিখলে
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     welcome_text = (
         "হ্যালো! আমি আপনার এআই বট।\n\n"
-        "মডেল পরিবর্তন করতে চাইলে লিখুন:\n"
-        "`/model মডেলের_নাম`\n\n"
-        "যেমন: `/model meta-llama/llama-3-8b-instruct:free`"
+        "আমাকে যেকোনো প্রশ্ন করতে পারেন অথবা **যেকোনো ছবি পাঠিয়ে** জিজ্ঞেস করতে পারেন ছবিতে কী আছে!\n\n"
+        "মডেল পরিবর্তন করতে চাইলে লিখুন:\n`/model মডেলের_নাম`"
     )
     bot.reply_to(message, welcome_text, parse_mode='Markdown')
 
-# ২. মডেল পরিবর্তন করার কমান্ড (/model)
 @bot.message_handler(commands=['model'])
 def change_model(message):
-    # ইউজার মেসেজ থেকে মডেলের নামটি আলাদা করা
     text_parts = message.text.split(maxsplit=1)
-    
     if len(text_parts) > 1:
         new_model = text_parts[1].strip()
         user_models[message.chat.id] = new_model
-        bot.reply_to(message, f"✅ সফলভাবে মডেল পরিবর্তন করা হয়েছে!\n\nনতুন মডেল: `{new_model}`", parse_mode='Markdown')
+        bot.reply_to(message, f"✅ মডেল পরিবর্তন করা হয়েছে!\n\nবর্তমান মডেল: `{new_model}`", parse_mode='Markdown')
     else:
-        bot.reply_to(message, "⚠️ ভুল কমান্ড! সঠিক নিয়ম হলো:\n`/model <মডেলের_নাম>`\n\nউদাহরণ: `/model google/gemini-1.5-flash:free`", parse_mode='Markdown')
+        bot.reply_to(message, "⚠️ সঠিক নিয়ম:\n`/model google/gemini-1.5-flash:free`", parse_mode='Markdown')
 
-# ৩. কেউ অন্য মেসেজ দিলে AI যা উত্তর দিবে
-@bot.message_handler(func=lambda message: True)
+# এখানে content_types এ 'photo' যুক্ত করা হয়েছে যেন বট ছবি নিতে পারে
+@bot.message_handler(content_types=['text', 'photo'])
 def handle_message(message):
     try:
         bot.send_chat_action(message.chat.id, 'typing')
-        
-        # ইউজারের সিলেক্ট করা মডেলটি নেওয়া (না থাকলে ডিফল্টটা নিবে)
         model_to_use = user_models.get(message.chat.id, DEFAULT_MODEL)
         
-        response = client.chat.completions.create(
-            model=model_to_use, 
-            messages=[{"role": "user", "content": message.text}]
-        )
-        
+        # যদি ইউজার শুধু টেক্সট পাঠায়
+        if message.content_type == 'text':
+            response = client.chat.completions.create(
+                model=model_to_use, 
+                messages=[{"role": "user", "content": message.text}]
+            )
+            
+        # যদি ইউজার ছবি পাঠায়
+        elif message.content_type == 'photo':
+            # ১. টেলিগ্রাম থেকে ছবিটি ডাউনলোড করা
+            file_info = bot.get_file(message.photo[-1].file_id)
+            downloaded_file = bot.download_file(file_info.file_path)
+            
+            # ২. ছবিকে Base64 কোডে রূপান্তর করা (এআইয়ের বোঝার জন্য)
+            base64_image = base64.b64encode(downloaded_file).decode('utf-8')
+            
+            # ৩. ছবির সাথে কোনো ক্যাপশন আছে কিনা চেক করা
+            user_text = message.caption if message.caption else "এই ছবিটিতে কী আছে বিস্তারিত বলুন।"
+            
+            # ৪. ছবি এবং টেক্সট একসাথে এআইকে পাঠানো
+            vision_content = [
+                {"type": "text", "text": user_text},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+            ]
+            
+            response = client.chat.completions.create(
+                model=model_to_use, 
+                messages=[{"role": "user", "content": vision_content}]
+            )
+            
+        # এআইয়ের উত্তর ইউজারকে পাঠানো
         reply_text = response.choices[0].message.content
         bot.reply_to(message, reply_text)
         
@@ -69,7 +87,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Bot is Running Perfectly!"
+    return "Bot is Running with Vision Capability!"
 
 def run_bot():
     bot.infinity_polling()
