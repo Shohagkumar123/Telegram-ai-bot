@@ -15,14 +15,19 @@ client = OpenAI(
   api_key=OPENROUTER_API_KEY,
 )
 
-# কেউ মেসেজ দিলে বট কী উত্তর দিবে তার ফাংশন
+# ১. কেউ /start লিখলে বট এই উত্তরটি দিবে
+@bot.message_handler(commands=['start'])
+def send_welcome(message):
+    bot.reply_to(message, "হ্যালো! আমি আপনার এআই (AI) বট। আমাকে যেকোনো কিছু জিজ্ঞেস করতে পারেন।")
+
+# ২. কেউ অন্য কোনো মেসেজ দিলে AI যা উত্তর দিবে
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     try:
         # ইউজারকে দেখানো যে বট টাইপ করছে
         bot.send_chat_action(message.chat.id, 'typing')
         
-        # OpenRouter এর ফ্রি মডেল দিয়ে উত্তর তৈরি করা (এখানে gemini-2.0-flash-lite এর ফ্রি ভার্সন ব্যবহার করা হয়েছে)
+        # OpenRouter এর ফ্রি মডেল দিয়ে উত্তর তৈরি করা
         response = client.chat.completions.create(
             model="google/gemini-2.0-flash-lite-preview-02-05:free", 
             messages=[{"role": "user", "content": message.text}]
@@ -32,18 +37,21 @@ def handle_message(message):
         bot.reply_to(message, reply_text)
         
     except Exception as e:
-        bot.reply_to(message, "দুঃখিত, কোনো একটি সমস্যা হয়েছে! পরে আবার চেষ্টা করুন।")
+        # যদি API তে কোনো সমস্যা হয়, তাহলে Render এর লগে (Log) এররটি দেখাবে এবং ইউজারকে নিচের মেসেজটি দিবে
+        print(f"Error occurred: {e}")
+        bot.reply_to(message, "দুঃখিত, এআই (AI) এখন উত্তর দিতে পারছে না। API Key বা অন্য কোনো সমস্যা হতে পারে।")
 
 # Render এ হোস্ট করার জন্য ছোট্ট একটি ফ্লাস্ক (Flask) ওয়েব সার্ভার
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "My Telegram AI Bot is Running!"
+    return "My Telegram AI Bot is Running Perfectly!"
 
 # বটকে ব্যাকগ্রাউন্ডে চালু রাখার ফাংশন
 def run_bot():
-    bot.infinity_polling()
+    # non_stop=True দিলে বট কোনো কারণে বন্ধ হলেও আবার নিজে নিজে চালু হবে
+    bot.infinity_polling(non_stop=True)
 
 if __name__ == "__main__":
     # বটকে আলাদা থ্রেডে চালু করা হচ্ছে
