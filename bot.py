@@ -17,38 +17,35 @@ client = OpenAI(
 # কেউ /start লিখলে
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    print("✅ /start কমান্ড এসেছে!", flush=True) 
-    bot.reply_to(message, "হ্যালো! আমি রেডি। আমাকে কিছু জিজ্ঞেস করুন।")
+    bot.reply_to(message, "হ্যালো! আমি আপনার এআই বট। আমাকে যেকোনো কিছু জিজ্ঞেস করতে পারেন।")
 
 # কেউ অন্য মেসেজ দিলে
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
-    print(f"📩 ইউজার মেসেজ দিয়েছে: {message.text}", flush=True) 
     try:
         bot.send_chat_action(message.chat.id, 'typing')
-        # এখানে মডেলের নাম পরিবর্তন করে আরেকটি ফ্রি মডেল দেওয়া হলো
+        
+        # এখানে সবচেয়ে স্ট্যাবল (Stable) একটি ফ্রি মডেলের নাম দেওয়া হলো
         response = client.chat.completions.create(
-            model="google/gemini-2.0-pro-exp-02-05:free", 
+            model="google/gemma-2-9b-it:free", 
             messages=[{"role": "user", "content": message.text}]
         )
+        
         reply_text = response.choices[0].message.content
         bot.reply_to(message, reply_text)
-        print("✅ AI উত্তর দিয়েছে!", flush=True)
         
     except Exception as e:
-        print(f"❌ Error: {e}", flush=True)
-        # এবার বট সরাসরি এরর মেসেজটি টেলিগ্রামে পাঠিয়ে দিবে!
+        # যদি কোনো সমস্যা হয়, বট আপনাকে জানাবে
         bot.reply_to(message, f"এআই এরর দিচ্ছে: {e}")
 
-# Flask সার্ভার
+# Flask সার্ভার (Render এর জন্য)
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Bot is Running!"
+    return "Bot is Running Perfectly!"
 
 def run_bot():
-    print("🤖 Bot Polling Started...", flush=True)
     bot.infinity_polling()
 
 if __name__ == "__main__":
