@@ -3,7 +3,6 @@ from openai import OpenAI
 import os
 from flask import Flask
 import threading
-import sys
 
 # এনভায়রনমেন্ট ভেরিয়েবল
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
@@ -18,13 +17,13 @@ client = OpenAI(
 # কেউ /start লিখলে
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    print("✅ /start কমান্ড এসেছে!", flush=True) # এটি Render এর লগে দেখাবে
+    print("✅ /start কমান্ড এসেছে!", flush=True) 
     bot.reply_to(message, "হ্যালো! আমি রেডি। আমাকে কিছু জিজ্ঞেস করুন।")
 
 # কেউ অন্য মেসেজ দিলে
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
-    print(f"📩 ইউজার মেসেজ দিয়েছে: {message.text}", flush=True) # এটি Render এর লগে দেখাবে
+    print(f"📩 ইউজার মেসেজ দিয়েছে: {message.text}", flush=True) 
     try:
         bot.send_chat_action(message.chat.id, 'typing')
         response = client.chat.completions.create(
@@ -46,9 +45,11 @@ app = Flask(__name__)
 def home():
     return "Bot is Running!"
 
+# বটকে চালু রাখার ফাংশন (এররটি এখানেই ঠিক করা হয়েছে)
 def run_bot():
     print("🤖 Bot Polling Started...", flush=True)
-    bot.infinity_polling(non_stop=True, timeout=60, request_timeout=60)
+    # non_stop=True সরিয়ে দেওয়া হয়েছে
+    bot.infinity_polling()
 
 if __name__ == "__main__":
     threading.Thread(target=run_bot).start()
